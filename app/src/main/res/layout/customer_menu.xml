@@ -33,21 +33,30 @@
                 android:background="@mipmap/customer_back"
                 android:src="@drawable/transparent_mask" />
 
+            <ImageButton
+                android:id="@+id/camera"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:layout_marginLeft="40dip"
+                android:layout_marginTop="5dip"
+                android:background="@mipmap/icon_camera"
+                android:src="@drawable/transparent_mask" />
+
+            <ImageButton
+                android:id="@+id/choose_album_btn"
+                android:layout_width="32dp"
+                android:layout_height="27dp"
+                android:layout_marginLeft="65dip"
+                android:layout_marginTop="5dip"
+                android:background="@mipmap/icon_album"
+                android:src="@drawable/transparent_mask" />
+
             <TextView
                 android:id="@+id/customer_city"
                 style="@style/customer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerHorizontal="true" />
-
-            <ImageButton
-                android:id="@+id/camera"
-                android:layout_width="25dp"
-                android:layout_height="25dp"
-                android:layout_marginLeft="360dip"
-                android:layout_marginTop="5dip"
-                android:background="@mipmap/icon_camera"
-                android:src="@drawable/transparent_mask" />
         </RelativeLayout>
 
         <RelativeLayout
