@@ -1,0 +1,8 @@
+#ABNF 1.0 UTF-8;
+language zh-CN; 
+mode voice;
+
+root $main;
+$main = [$call] $name;
+$call = 你好小骑|小骑你好|小骑;
+$name = 拍照|打开相机|打开照相机;
