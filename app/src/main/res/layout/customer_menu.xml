@@ -30,8 +30,9 @@
                 android:layout_height="25dp"
                 android:layout_marginLeft="5dip"
                 android:layout_marginTop="5dip"
-                android:background="@mipmap/customer_back"
+                android:background="@mipmap/icon_camera"
                 android:src="@drawable/transparent_mask" />
+            <!--                android:background="@mipmap/customer_back"-->
 
             <ImageButton
                 android:id="@+id/camera"
@@ -39,9 +40,9 @@
                 android:layout_height="25dp"
                 android:layout_marginLeft="40dip"
                 android:layout_marginTop="5dip"
-                android:background="@mipmap/icon_camera"
+                android:background="@mipmap/icon_album"
                 android:src="@drawable/transparent_mask" />
-
+<!--            android:background="@mipmap/icon_camera"-->
             <ImageButton
                 android:id="@+id/choose_album_btn"
                 android:layout_width="32dp"
@@ -208,6 +209,26 @@
                 android:layout_marginStart="20dp"
                 android:layout_marginTop="25dp"
                 android:background="@drawable/luopan_seclect" />
+
+            <Button
+                android:id="@+id/btn_speechStart"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_below="@id/poilayout"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="65dp"
+                android:layout_weight="1"
+                android:text="开"/>
+
+            <Button
+                android:id="@+id/btn_speechStop"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_below="@id/poilayout"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="105dp"
+                android:layout_weight="1"
+                android:text="关" />
 
 
             <ImageButton

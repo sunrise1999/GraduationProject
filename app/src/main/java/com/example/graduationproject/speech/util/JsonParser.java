@@ -116,9 +116,9 @@ public class JsonParser {
 						ret.append("没有匹配结果.");
 						return ret.toString();
 					}
-					ret.append("【结果】" + obj.getString("w"));
-					ret.append("【置信度】" + obj.getInt("sc"));
-					ret.append("\n");
+					ret.append("|【结果】|" + obj.getString("w"));
+					ret.append("|【置信度】|" + obj.getInt("sc"));
+					ret.append("|\n");
 				}
 			}
 		} catch (Exception e) {

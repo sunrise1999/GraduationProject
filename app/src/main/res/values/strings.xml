@@ -13,4 +13,6 @@
     <string name="btn_confirm">确定</string>
     <string name="btn_cancel">取消</string>
     <string name="str_warning">警告</string>
+<!--    语音识别字符串-->
+    <string name="app_id">bc6a9504</string>
 </resources>

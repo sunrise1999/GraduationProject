@@ -164,10 +164,14 @@ public class albumActivity extends AppCompatActivity {
     @Override
     public boolean onContextItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case 0:
-                Bitmap bm =
-                        BitmapFactory.decodeFile(imgList.get(currentSel).getFilePath());
-
+            case 0://选择分享操作
+                //实现分享
+                Uri uri = Uri.parse(imgList.get(currentSel).getFilePath());
+                Intent intent = new Intent();
+                intent.setAction(Intent.ACTION_SEND);
+                intent.putExtra(Intent.EXTRA_STREAM, uri);
+                intent.setType("image/*");
+                startActivity(Intent.createChooser(intent, "选择分享应用"));
                 /*try {
                     WallpaperManager wallpaperManager = WallpaperManager.getInstance(albumActivity.this);
                     *//*wallpaperManager.setBitmap(bm);

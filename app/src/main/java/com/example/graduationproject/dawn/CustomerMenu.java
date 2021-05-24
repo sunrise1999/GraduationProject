@@ -15,8 +15,8 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
-import android.text.format.DateFormat;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -32,12 +32,11 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.RequiresApi;
-import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 
 import com.baidu.location.BDAbstractLocationListener;
 import com.baidu.location.BDLocation;
@@ -84,7 +83,6 @@ import com.baidu.mapapi.search.route.MassTransitRouteResult;
 import com.baidu.mapapi.search.route.OnGetRoutePlanResultListener;
 import com.baidu.mapapi.search.route.PlanNode;
 import com.baidu.mapapi.search.route.RoutePlanSearch;
-import com.baidu.mapapi.search.route.TransitRoutePlanOption;
 import com.baidu.mapapi.search.route.TransitRouteResult;
 import com.baidu.mapapi.search.route.WalkingRoutePlanOption;
 import com.baidu.mapapi.search.route.WalkingRouteResult;
@@ -97,8 +95,24 @@ import com.example.graduationproject.overlayutil.BikingRouteOverlay;
 import com.example.graduationproject.overlayutil.DrivingRouteOverlay;
 import com.example.graduationproject.overlayutil.OverlayManager;
 import com.example.graduationproject.overlayutil.PoiOverlay;
-import com.example.graduationproject.overlayutil.TransitRouteOverlay;
 import com.example.graduationproject.overlayutil.WalkingRouteOverlay;
+import com.example.graduationproject.speech.util.JsonParser;
+import com.iflytek.cloud.ErrorCode;
+import com.iflytek.cloud.GrammarListener;
+import com.iflytek.cloud.InitListener;
+import com.iflytek.cloud.RecognizerResult;
+import com.iflytek.cloud.SpeechConstant;
+import com.iflytek.cloud.SpeechError;
+import com.iflytek.cloud.SpeechEvent;
+import com.iflytek.cloud.SpeechRecognizer;
+import com.iflytek.cloud.SpeechUtility;
+import com.iflytek.cloud.VoiceWakeuper;
+import com.iflytek.cloud.WakeuperListener;
+import com.iflytek.cloud.WakeuperResult;
+import com.iflytek.cloud.util.ResourceUtil;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -143,6 +157,43 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
     private TextView mylocation;
     private EditText start_edit, end_edit;
     boolean isFirstLoc = true; // 是否首次定位
+
+    //语音识别相关
+    private Button speechStartButton;//语音开启按钮
+    private Button speechStopButton;//语音关闭按钮
+    //public OneShot oneShot;
+    private String TAG = "ivw";
+    private Toast mToast;
+    private TextView textView;
+    // 语音唤醒对象
+    private VoiceWakeuper mIvw;
+    // 语音识别对象
+    private SpeechRecognizer mAsr;
+    // 唤醒结果内容
+    private String resultString;
+    // 识别结果内容
+    private String recoString;
+    // 设置门限值 ： 门限值越低越容易被唤醒
+    private TextView tvThresh;
+    private SeekBar seekbarThresh;
+    private final static int MAX = 3000;
+    private final static int MIN = 0;
+    private int curThresh = 1450;
+    private String threshStr = "门限值：";
+    // 云端语法文件
+    private String mCloudGrammar = null;
+    // 云端语法id
+    private String mCloudGrammarID;
+    // 本地语法id
+    private String mLocalGrammarID;
+    // 本地语法文件
+    private String mLocalGrammar = null;
+    // 本地语法构建路径
+    private String grmPath = Environment.getExternalStorageDirectory().getAbsolutePath()
+            + "/msc/test";
+    // 引擎类型
+    private String mEngineType = SpeechConstant.TYPE_LOCAL;
+
 
     // 地图相关，使用继承MapView的MyRouteMapView目的是重写touch事件实现泡泡处理
     // 如果不处理touch事件，则无需继承，直接使用MapView即可
@@ -209,6 +260,17 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
         inintmap();
         // 初始化传感器
         initOritationListener();
+        //初始化语音识别
+        // 将“12345678”替换成您申请的APPID，申请地址：http://www.xfyun.cn
+        // 请勿在“=”与appid之间添加任何空字符或者转义符
+        StringBuffer param = new StringBuffer();
+        param.append("appid="+getString(R.string.app_id));
+        param.append(",");
+        // 设置使用v5+
+        param.append(SpeechConstant.ENGINE_MODE+"="+SpeechConstant.MODE_MSC);
+        SpeechUtility.createUtility(CustomerMenu.this, param.toString());
+        initSpeechRecognition();
+
 
         mCurrentMode = LocationMode.COMPASS;
         requestLocButton.setText("罗");
@@ -319,6 +381,7 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
                 });
             }
         });
+
     }
 
     // 地图初始化
@@ -378,12 +441,18 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
         // 地图点击事件
         click_layout = (LinearLayout) findViewById(R.id.click_layout);
         endlocation = (TextView) findViewById(R.id.endlocation);
+        //语音识别开关按钮
+        speechStartButton = (Button) findViewById(R.id.btn_speechStart);
+        speechStopButton = (Button) findViewById(R.id.btn_speechStop);
 
         my_back.setOnClickListener(this);
         open_camera.setOnClickListener(this);
         choose_album_btn.setOnClickListener(this);
         findroute.setOnClickListener(this);
         findroute2.setOnClickListener(this);
+        //语音识别监听器
+        speechStartButton.setOnClickListener(CustomerMenu.this);
+        speechStopButton.setOnClickListener(this);
 
         /****************** 动画 ***************/
         slide_in_above = AnimationUtils.loadAnimation(this, R.anim.slide_in_above);// 显示
@@ -465,6 +534,44 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
             }
         });
     }
+
+
+    /**
+     * 初始化语音转化监听器。
+     */
+    private InitListener mInitListener = new InitListener() {
+
+        @Override
+        public void onInit(int code) {
+            Log.d(TAG, "SpeechRecognizer init() code = " + code);
+            if (code != ErrorCode.SUCCESS) {
+                MyToast("初始化失败,错误码："+code+",请点击网址https://www.xfyun.cn/document/error-code查询解决方案");
+            }
+        }
+    };
+
+    /**
+     * 初始化语音识别
+     */
+    public void initSpeechRecognition() {
+
+
+        //oneShot = new OneShot(this);
+
+        //requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        initUI();
+
+        // 初始化唤醒对象
+        mIvw = VoiceWakeuper.createWakeuper(this, null);
+        // 初始化识别对象---唤醒+识别,用来构建语法
+        mAsr = SpeechRecognizer.createRecognizer(this, mInitListener);
+        // 初始化语法文件
+        mCloudGrammar = readFile(this, "wake_grammar_sample.abnf", "utf-8");
+        mLocalGrammar = readFile(this, "wake.bnf", "utf-8");
+    }
+
+
 
     /**
      * 发起路线规划搜索示例
@@ -687,6 +794,7 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
     protected void onDestroy() {
         mSearch.destroy();
         mMapView.onDestroy();
+        speechDestroy();
         super.onDestroy();
     }
 
@@ -739,7 +847,7 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
             } else if (location.getLocType() == BDLocation.TypeNetWorkLocation) {
                 currentPosition.append("网络");
             }
-            MyToast(currentPosition.toString());
+            //MyToast(currentPosition.toString());
             //后发现不需要，百度带有
             //changeIconDir();
         }
@@ -974,10 +1082,12 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
                 break;
             case R.id.camera:
                 // 打开相机
-                OpenCamera();
+//                OpenCamera();
+                //打开相册
+                OpenAlbum();
                 break;
             case R.id.choose_album_btn:
-                // 打开相机
+                // 打开相册
                 OpenAlbum();
                 break;
             case R.id.officient:
@@ -991,6 +1101,106 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
                     flag = true;
                     MyToast("关闭交通图");
                 }
+                break;
+            //开启语音识别
+            case R.id.btn_speechStart:
+                //语法构建
+                mAsr = SpeechRecognizer.createRecognizer(CustomerMenu.this, null);
+                int ret = 0;
+                if (mEngineType.equals(SpeechConstant.TYPE_CLOUD)) {
+                    // 设置参数
+                    mAsr.setParameter(SpeechConstant.ENGINE_TYPE, mEngineType);
+                    mAsr.setParameter(SpeechConstant.TEXT_ENCODING, "utf-8");
+                    // 开始构建语法
+                    ret = mAsr.buildGrammar("abnf", mCloudGrammar, grammarListener);
+                    if (ret != ErrorCode.SUCCESS) {
+                        Log.e("error","语法构建失败,错误码：" + ret + ",请点击网址https://www.xfyun.cn/document/error-code查询解决方案");
+                    }
+                } else {
+                    mAsr.setParameter(SpeechConstant.PARAMS, null);
+                    mAsr.setParameter(SpeechConstant.TEXT_ENCODING, "utf-8");
+                    // 设置引擎类型
+                    mAsr.setParameter(SpeechConstant.ENGINE_TYPE, mEngineType);
+                    // 设置语法构建路径
+                    mAsr.setParameter(ResourceUtil.GRM_BUILD_PATH, grmPath);
+                    // 设置资源路径
+                    mAsr.setParameter(ResourceUtil.ASR_RES_PATH, getResourcePath());
+                    ret = mAsr.buildGrammar("bnf", mLocalGrammar, grammarListener);
+                    if (ret != ErrorCode.SUCCESS) {
+                        Log.e("error","语法构建失败,错误码：" + ret + ",请点击网址https://www.xfyun.cn/document/error-code查询解决方案");
+                    }
+                }
+                // 非空判断，防止因空指针使程序崩溃
+                Log.e("kaiqi:","111111");
+                MyToast("开启");
+                mIvw = VoiceWakeuper.getWakeuper();
+                if (mIvw != null) {
+                    resultString = "";
+                    recoString = "";
+                    MyToast(resultString);
+
+                    final String resPath = ResourceUtil.generateResourcePath(this, ResourceUtil.RESOURCE_TYPE.assets, "ivw/"+getString(R.string.app_id)+".jet");
+                    // 清空参数
+                    mIvw.setParameter(SpeechConstant.PARAMS, null);
+                    // 设置识别引擎
+                    mIvw.setParameter(SpeechConstant.ENGINE_TYPE, mEngineType);
+                    // 设置唤醒资源路径
+                    mIvw.setParameter(ResourceUtil.IVW_RES_PATH, resPath);
+                    /**
+                     * 唤醒门限值，根据资源携带的唤醒词个数按照“id:门限;id:门限”的格式传入
+                     * 示例demo默认设置第一个唤醒词，建议开发者根据定制资源中唤醒词个数进行设置
+                     */
+                    mIvw.setParameter(SpeechConstant.IVW_THRESHOLD, "0:"
+                            + curThresh);
+                    // 设置唤醒+识别模式
+                    mIvw.setParameter(SpeechConstant.IVW_SST, "oneshot");
+                    // 设置返回结果格式
+                    mIvw.setParameter(SpeechConstant.RESULT_TYPE, "json");
+//
+//				mIvw.setParameter(SpeechConstant.IVW_SHOT_WORD, "0");
+
+                    // 设置唤醒录音保存路径，保存最近一分钟的音频
+                    mIvw.setParameter( SpeechConstant.IVW_AUDIO_PATH, Environment.getExternalStorageDirectory().getPath()+"/msc/ivw.wav" );
+                    mIvw.setParameter( SpeechConstant.AUDIO_FORMAT, "wav" );
+
+                    if (mEngineType.equals(SpeechConstant.TYPE_CLOUD)) {
+                        if (!TextUtils.isEmpty(mCloudGrammarID)) {
+                            // 设置云端识别使用的语法id
+                            mIvw.setParameter(SpeechConstant.CLOUD_GRAMMAR,
+                                    mCloudGrammarID);
+                            mIvw.startListening(mWakeuperListener);
+                        } else {
+                            MyToast("请先构建语法");
+                        }
+                    } else {
+                        if (!TextUtils.isEmpty(mLocalGrammarID)) {
+                            // 设置本地识别资源
+                            mIvw.setParameter(ResourceUtil.ASR_RES_PATH,
+                                    getResourcePath());
+                            // 设置语法构建路径
+                            mIvw.setParameter(ResourceUtil.GRM_BUILD_PATH, grmPath);
+                            // 设置本地识别使用语法id
+                            mIvw.setParameter(SpeechConstant.LOCAL_GRAMMAR,
+                                    mLocalGrammarID);
+                            mIvw.startListening(mWakeuperListener);
+                        } else {
+                            MyToast("请先构建语法");
+                        }
+                    }
+
+                } else {
+                    MyToast("唤醒未初始化");
+                }
+                break;
+            //关闭语音识别
+            case R.id.btn_speechStop:
+                mIvw = VoiceWakeuper.getWakeuper();
+                if (mIvw != null) {
+                    mIvw.stopListening();
+                } else {
+                    MyToast("唤醒未初始化");
+                }
+                break;
         }
     }
 
@@ -1062,7 +1272,7 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
     /**
      * 调用系统相机
      */
-    private void OpenCamera() {
+    public void OpenCamera() {
         Intent openCameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         String f = System.currentTimeMillis() + ".jpg";
         cameraFile = new File(getExternalFilesDir(null) + "/" + f);
@@ -1190,4 +1400,159 @@ public class CustomerMenu extends Activity implements OnMapClickListener, OnGetR
         intent.setClass(CustomerMenu.this, albumActivity.class);
         CustomerMenu.this.startActivity(intent);
     }
+
+    //语音识别函数
+
+    private void initUI() {
+        mToast = Toast.makeText(this, "", Toast.LENGTH_SHORT);
+
+        /*seekbarThresh.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+            @Override
+            public void onStopTrackingTouch(SeekBar arg0) {
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar arg0) {
+            }
+
+            @Override
+            public void onProgressChanged(SeekBar arg0, int arg1, boolean arg2) {
+                curThresh = seekbarThresh.getProgress() + MIN;
+                tvThresh.setText(threshStr + curThresh);
+            }
+        });*/
+        //选择云端or本地
+//        mEngineType = SpeechConstant.TYPE_CLOUD;//云端
+        mEngineType = SpeechConstant.TYPE_LOCAL;//本地
+    }
+
+    GrammarListener grammarListener = new GrammarListener() {
+        @Override
+        public void onBuildFinish(String grammarId, SpeechError error) {
+            if (error == null) {
+                if (mEngineType.equals(SpeechConstant.TYPE_CLOUD)) {
+                    mCloudGrammarID = grammarId;
+                } else {
+                    mLocalGrammarID = grammarId;
+                }
+                MyToast("语法构建成功：" + grammarId);
+            } else {
+                MyToast("语法构建失败,错误码：" + error.getErrorCode()+",请点击网址https://www.xfyun.cn/document/error-code查询解决方案");
+            }
+        }
+    };
+
+    private WakeuperListener mWakeuperListener = new WakeuperListener() {
+
+        @Override
+        public void onResult(WakeuperResult result) {
+            try {
+                String text = result.getResultString();
+                JSONObject object;
+                object = new JSONObject(text);
+                StringBuffer buffer = new StringBuffer();
+                buffer.append("【RAW】 "+text);
+                buffer.append("\n");
+                buffer.append("【操作类型】"+ object.optString("sst"));
+                buffer.append("\n");
+                buffer.append("【唤醒词id】"+ object.optString("id"));
+                buffer.append("\n");
+                buffer.append("【得分】" + object.optString("score"));
+                buffer.append("\n");
+                buffer.append("【前端点】" + object.optString("bos"));
+                buffer.append("\n");
+                buffer.append("【尾端点】" + object.optString("eos"));
+                resultString =buffer.toString();
+            } catch (JSONException e) {
+                resultString = "结果解析出错";
+                e.printStackTrace();
+            }
+            MyToast(resultString);
+        }
+
+        @Override
+        public void onError(SpeechError error) {
+            MyToast(error.getPlainDescription(true));
+        }
+
+        @Override
+        public void onBeginOfSpeech() {
+            MyToast("开始说话");
+        }
+
+        @Override
+        public void onEvent(int eventType, int isLast, int arg2, Bundle obj) {
+            Log.d(TAG, "eventType:"+eventType+ "arg1:"+isLast + "arg2:" + arg2);
+            // 识别结果
+            if (SpeechEvent.EVENT_IVW_RESULT == eventType) {
+                RecognizerResult reslut = ((RecognizerResult)obj.get(SpeechEvent.KEY_EVENT_IVW_RESULT));
+                recoString += JsonParser.parseGrammarResult(reslut.getResultString());
+                MyToast(recoString);
+                Log.i("识别结果：",recoString);
+                String[] all=recoString.split("\\|");
+                Log.i("识别结果2：",all.length+"");
+                Log.i("识别结果2：",all[1]+"");
+                for (int i = 0;i <all.length;i++)
+                {
+                    System.out.println(all[i]);
+                }
+                int believeFirst = Integer.parseInt(all[4]);
+                int believeSecound = Integer.parseInt(all[9]);
+                if(believeFirst >= 50 && believeSecound >= 50)
+                {
+                    OpenCamera();
+                }
+            }
+        }
+
+        @Override
+        public void onVolumeChanged(int volume) {
+            // TODO Auto-generated method stub
+
+        }
+
+    };
+
+    protected void speechDestroy() {
+        Log.d(TAG, "onDestroy OneShotDemo");
+        mIvw = VoiceWakeuper.getWakeuper();
+        if (mIvw != null) {
+            mIvw.destroy();
+        } else {
+            MyToast("唤醒未初始化");
+        }
+    }
+
+    /**
+     * 读取asset目录下文件。
+     *
+     * @return content
+     */
+    public static String readFile(Context mContext, String file, String code) {
+        int len = 0;
+        byte[] buf = null;
+        String result = "";
+        try {
+            InputStream in = mContext.getAssets().open(file);
+            len = in.available();
+            buf = new byte[len];
+            in.read(buf, 0, len);
+
+            result = new String(buf, code);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
+    // 获取识别资源路径
+    private String getResourcePath() {
+        StringBuffer tempBuffer = new StringBuffer();
+        // 识别通用资源
+        tempBuffer.append(ResourceUtil.generateResourcePath(this,
+                ResourceUtil.RESOURCE_TYPE.assets, "asr/common.jet"));
+        return tempBuffer.toString();
+    }
+
 }
